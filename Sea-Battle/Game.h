@@ -11,10 +11,29 @@ private:
 public:
 	Game() = default;
 
-	void debug()
+	void start()
 	{
-		placingShipsStage_OnePlayer();
-		shootingStage_OnePlayer();
+        printColoredText("SEA BATTLE\n\n", LIGHTBLUE);
+
+        int input = -1;
+        while (input != 1 && input != 2)
+        {
+            std::cout << "Enter 1 to play against computer\nEnter 2 to play against other player\n\n";
+            std::cin >> input;
+        }
+
+        clearScreen();
+
+        if (input == 1)
+        {
+            placingShipsStage_OnePlayer();
+            shootingStage_OnePlayer();
+        }
+        else
+        {
+            placingShipsStage_TwoPlayers();
+            shootingStage_TwoPlayers();
+        }
 	}
 
 private:
@@ -81,7 +100,7 @@ private:
 			// PLAYER 1 TURN
 			printColoredText("Player 1 field\n", LIGHTGREEN);
 			fieldPlayer1.printField(printFieldPointFriendly);
-			printColoredText("\Computer's field\n", RED);
+			printColoredText("Computer's field\n", RED);
 			fieldPlayer2.printField(printFieldPointOpponent);
 			if (fieldPlayer2.shootAtFieldProcess_Player())
 			{

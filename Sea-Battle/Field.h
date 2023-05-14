@@ -19,7 +19,7 @@ enum FieldGraphics
 	NEXT_TO_SHIP // 4
 };
 
-void printFieldPointFriendly(int fieldPoint)
+inline void printFieldPointFriendly(int fieldPoint)
 {
 	if (fieldPoint == UNKNOWN)
 	{
@@ -43,7 +43,7 @@ void printFieldPointFriendly(int fieldPoint)
 	}
 }
 
-void printFieldPointOpponent(int fieldPoint)
+inline void printFieldPointOpponent(int fieldPoint)
 {
 	if (fieldPoint == UNKNOWN)
 	{
@@ -68,7 +68,7 @@ void printFieldPointOpponent(int fieldPoint)
 }
 
 
-void printPressToContinueScreen(std::string printText = "", bool clearBefore = true)
+inline void printPressToContinueScreen(std::string printText = "", bool clearBefore = true)
 {
 	int x;
 	if (clearBefore)
@@ -383,7 +383,7 @@ public:
 		int shipSizeIndex = 0;
 		std::pair <int, int> coords;
 
-		while (shipSizeIndex != shipSizes.size())
+		while (shipSizeIndex != (int)shipSizes.size())
 		{
 			clearScreen();
 			this->printField(printFieldPointFriendly);
@@ -415,7 +415,7 @@ public:
 		std::pair <int, int> coords;
 		int iterateDirection = 1;
 		
-		while (shipSizeIndex != shipSizes.size())
+		while (shipSizeIndex != (int)shipSizes.size())
 		{
 			coords = std::make_pair(distrX(gen), distrY(gen));
 
