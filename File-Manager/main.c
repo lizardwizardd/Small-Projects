@@ -16,6 +16,8 @@
 #define KEY_X 6
 #define KEY_C 7
 #define KEY_V 8
+#define KEY_ENTER 9 
+#define KEY_DELETE 10
 
 const int MAX_FILES_ON_SCREEN = 37;
 const int BUFFER_STATUS_LINE = 38;
@@ -67,6 +69,10 @@ int getKey_Browse()
             return KEY_C;
         else if (GetAsyncKeyState(0x56) & 0x07)
             return KEY_V;
+        else if (GetAsyncKeyState(VK_DELETE) & 0x07)
+            return KEY_DELETE;
+        else if (GetAsyncKeyState(VK_RETURN) & 0x07)
+            return KEY_ENTER;
 
         Sleep(SLEEP_TIME_MS);
     }
@@ -134,6 +140,10 @@ void printDirectory(struct _finddata_t* files)
 
 void printBufferStatus(char bufferFileName[])
 {
+    // Nothing to pring if buffer is empty
+    if (currentBufferState == BUFFER_EMPTY)
+        return;
+    
     // Clear line from previous prints
     gotoxy(0, BUFFER_STATUS_LINE);
     char clearline[WINDOW_WIDTH] = "                                        ";
@@ -151,8 +161,6 @@ void printBufferStatus(char bufferFileName[])
             break;
         case BUFFER_COPYING:
             printf("Copying: %s", bufferFileName);
-            break;
-        case BUFFER_EMPTY:
             break;
     }
     
@@ -278,24 +286,21 @@ struct _finddata_t* getValues(char path[])
     struct _finddata_t *files_in_dir = (struct _finddata_t *)malloc(sizeof(struct _finddata_t) * dirSize);
 
     int i = 0;
-    int skips = 0;
     if ((hFile = _findfirst(path, &c_file)) == -1L)
         files_in_dir[0].size = -1;
     else
         do
         {
-            // Skip first two files ("." and "..") unless in root directory
-            if (path[3] != '*' && skips < 2) 
+            if (c_file.name[0] != '.' && !(c_file.attrib & _A_SYSTEM)) 
             {
-                skips++;
-                continue;
+                files_in_dir[i] = c_file;
+                i++;
             }
-
-            files_in_dir[i] = c_file;
-            i++;
         } 
         while(_findnext(hFile, &c_file) == 0);
     _findclose(hFile);
+
+    dirSize = i;
     return files_in_dir;
 }
 
@@ -308,7 +313,7 @@ int moveFile(char source[], char destination[])
             printCustomBufferStatus("File already exists.", LIGHTRED);
         else
         {
-            printCustomBufferStatus("Move file failed.", LIGHTRED);
+            printCustomBufferStatus("Move failed.", LIGHTRED);
             printf("%ld", GetLastError());
         }
         return 0;
@@ -322,11 +327,18 @@ int moveFile(char source[], char destination[])
 // Copy file from source to destination. Returns 1 if succeeded, 0 if failed
 int copyFile(char source[], char destination[])
 {
-    SetFileAttributes(source ,FILE_ATTRIBUTE_NORMAL);
-    SetFileAttributes(destination,FILE_ATTRIBUTE_NORMAL);
+    SetFileAttributes(source, FILE_ATTRIBUTE_NORMAL);
+    SetFileAttributes(destination, FILE_ATTRIBUTE_NORMAL);
 
     if (!CopyFileA(source, destination, FALSE))
     {
+        if (GetLastError() == 183)
+            printCustomBufferStatus("File already exists.", LIGHTRED);
+        else
+        {
+            printCustomBufferStatus("Copy failed.", LIGHTRED);
+            printf("%ld", GetLastError());
+        }
         return 0;
     }
     else
@@ -335,12 +347,19 @@ int copyFile(char source[], char destination[])
     }
 }
 
+int deleteFile(char file[])
+{
+    SetFileAttributes(file, FILE_ATTRIBUTE_NORMAL);
+    return DeleteFile(file);
+}
+
 int main(void)
 {
     struct _finddata_t* files;
     char currentPath[MAX_PATH_LENGTH] = "C:\\*.*";
     char bufferPath[MAX_PATH_LENGTH];
     char bufferFileName[MAX_PATH_LENGTH];
+    char _currentPath[MAX_PATH_LENGTH];
 
     int posInMenu = 0;   // selected file
     int prevPos = 0;     // previous selected file
@@ -492,7 +511,6 @@ int main(void)
                 }
 
                 // Make a copy of currentPath, because its used elsewhere
-                char _currentPath[MAX_PATH_LENGTH];
                 strcpy(_currentPath, currentPath);
 
                 // Strip the paths from "*.*"
@@ -516,6 +534,10 @@ int main(void)
                         printCustomBufferStatus("Failed to paste file.", LIGHTRED);
                         break;
                     }
+                    else
+                    {
+                        currentBufferState = BUFFER_EMPTY;
+                    }
                 }
 
                 // Update current dir
@@ -526,7 +548,47 @@ int main(void)
                 printCustomBufferStatus("Done.", LIGHTGREEN);
 
                 break;
-                
+            
+            case KEY_DELETE:
+                // Make a copy of currentPath, because its used elsewhere
+                strcpy(_currentPath, currentPath);
+
+                // Strip the path from "*.*"
+                removeWildcard(_currentPath);
+
+                // Append filename to the path
+                strcat(_currentPath, files[posInMenu].name);
+
+                // Confirm delete
+                char confirmation;
+                clrscr();
+                printf(" Deleting file '%s'\n Located in: %s\n Are you sure? (y/n) ",
+                        files[posInMenu].name, currentPath);
+                scanf(" %c", &confirmation);
+                clrscr();
+                if (confirmation == 'y')
+                {
+                    if (!deleteFile(_currentPath))
+                    {
+                        printCustomBufferStatus("Failed to delete.", LIGHTRED);
+                        printf(" %ld.", GetLastError());
+                    }
+                    else
+                        printCustomBufferStatus("Done.", LIGHTGREEN);
+                }
+                else
+                {
+                    printCustomBufferStatus("Delete cancelled.", LIGHTRED);
+                }
+
+                // Update current dir
+                files = getValues(currentPath);
+                printDirectory(files);
+                printColoredLine(posInMenu, BLACK, WHITE, files);
+                printBufferStatus(bufferFileName);
+
+                break;
+
             case KEY_SPACEBAR:
                 if (dirSize > 0)
                 {
