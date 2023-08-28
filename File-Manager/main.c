@@ -4,21 +4,45 @@
 #define SLEEP_TIME_MS 100
 #define MAX_PATH_LENGTH 255
 
+#define WINDOW_WIDTH 44
+#define WINDOW_HEIGHT 40
+
+#define KEY_ESC 0
 #define KEY_ARROW_UP 1
 #define KEY_ARROW_RIGHT 2
 #define KEY_ARROW_DOWN 3
 #define KEY_ARROW_LEFT 4
-#define KEY_ESC 0
 #define KEY_SPACEBAR 5
+#define KEY_X 6
+#define KEY_C 7
+#define KEY_V 8
 
-const int MAX_FILES_ON_SCREEN = 38;
-const int AST_LINE_ON_SCREEN = MAX_FILES_ON_SCREEN + 38;
+const int MAX_FILES_ON_SCREEN = 37;
+const int BUFFER_STATUS_LINE = 38;
+const int FILE_COUNT_INFO_LINE = 39;
 
-int dirSize; // Amount of files and directories in the current directory
+enum bufferState
+{
+    BUFFER_EMPTY,
+    BUFFER_COPYING,
+    BUFFER_MOVING
+};
+
+int dirSize; // Number of files and directories in the current directory
+enum bufferState currentBufferState = BUFFER_EMPTY; // 0 for empty, 1 for not empty
+
+// Clear screen, print error message and last error code, then stop the program
+void printErrorMessage(char* errorMessage)
+{
+    clrscr();
+    gotoxy(1, 1);
+    printf("%s. Error code: %ld.\n", errorMessage, GetLastError());
+    system("pause");
+}
 
 // Return a pressed key as a value from 0 to 4
 // Arrow up = 1, Arrow down = 3, Arrow right = 2, Arrow left = 4, ESC = 0
-int getKey_Browse() 
+int getKey_Browse()
 {
     while(1) {
         // Check if the window is focused
@@ -27,16 +51,22 @@ int getKey_Browse()
         
         if (GetAsyncKeyState(VK_ESCAPE) & 0x07)
             return KEY_ESC;
-        if (GetAsyncKeyState(VK_UP) & 0x07)
+        else if (GetAsyncKeyState(VK_UP) & 0x07)
             return KEY_ARROW_UP;
-        if (GetAsyncKeyState(VK_RIGHT) & 0x07)
+        else if (GetAsyncKeyState(VK_RIGHT) & 0x07)
             return KEY_ARROW_RIGHT;
-        if (GetAsyncKeyState(VK_DOWN) & 0x07)
+        else if (GetAsyncKeyState(VK_DOWN) & 0x07)
             return KEY_ARROW_DOWN;
-        if (GetAsyncKeyState(VK_LEFT) & 0x07)
+        else if (GetAsyncKeyState(VK_LEFT) & 0x07)
             return KEY_ARROW_LEFT;
-        if (GetAsyncKeyState(VK_SPACE) & 0x07)
+        else if (GetAsyncKeyState(VK_SPACE) & 0x07)
             return KEY_SPACEBAR;
+        else if (GetAsyncKeyState(0x58) & 0x07)
+            return KEY_X;
+        else if (GetAsyncKeyState(0x43) & 0x07)
+            return KEY_C;
+        else if (GetAsyncKeyState(0x56) & 0x07)
+            return KEY_V;
 
         Sleep(SLEEP_TIME_MS);
     }
@@ -97,9 +127,53 @@ void printDirectory(struct _finddata_t* files)
                 }
             }
         }
-        gotoxy(0, 39);
+        gotoxy(0, FILE_COUNT_INFO_LINE);
         printf("Files in directory: %d", dirSize);
     }
+}
+
+void printBufferStatus(char bufferFileName[])
+{
+    // Clear line from previous prints
+    gotoxy(0, BUFFER_STATUS_LINE);
+    char clearline[WINDOW_WIDTH] = "                                        ";
+    textcolor(BLACK);
+    printf("%s", clearline);
+
+    // Print buffer status
+    gotoxy(0, BUFFER_STATUS_LINE);
+    textcolor(LIGHTGREEN);
+
+    switch(currentBufferState)
+    {
+        case BUFFER_MOVING:
+            printf("Moving: %s", bufferFileName);
+            break;
+        case BUFFER_COPYING:
+            printf("Copying: %s", bufferFileName);
+            break;
+        case BUFFER_EMPTY:
+            break;
+    }
+    
+    textcolor(LIGHTGRAY); // back to default text color
+}
+
+void printCustomBufferStatus(char* message, enum TColor textColor)
+{
+    // Clear line from previous prints
+    gotoxy(0, BUFFER_STATUS_LINE);
+    char clearline[WINDOW_WIDTH] = "                                        ";
+    textcolor(BLACK);
+    printf("%s", clearline);
+
+    // Print custom line
+    gotoxy(0, BUFFER_STATUS_LINE);
+    textcolor(textColor);
+
+    printf("%s", message);
+    
+    textcolor(LIGHTGRAY); // back to default text color
 }
 
 // Change background color and text color of a given line 
@@ -142,6 +216,16 @@ void appendWildcard(char str1[], char str2[])
     str1[i+2] = '.';
     str1[i+3] = '*';
     str1[i+4] = '\0';
+}
+
+// Strip a string from the "*.*" 
+void removeWildcard(char* str1) 
+{
+    char* wildPtr = strstr(str1, "*.*");
+    if (wildPtr != NULL)
+    {
+        *wildPtr = '\0'; // end the string at the first char of "*.*"
+    }
 }
 
 // Change path to previous directory
@@ -215,11 +299,48 @@ struct _finddata_t* getValues(char path[])
     return files_in_dir;
 }
 
+// Move file from source to destination. Returns 1 if succeeded, 0 if failed
+int moveFile(char source[], char destination[])
+{
+    if (!MoveFile(source, destination))
+    {
+        if (GetLastError() == 183)
+            printCustomBufferStatus("File already exists.", LIGHTRED);
+        else
+        {
+            printCustomBufferStatus("Move file failed.", LIGHTRED);
+            printf("%ld", GetLastError());
+        }
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}
+
+// Copy file from source to destination. Returns 1 if succeeded, 0 if failed
+int copyFile(char source[], char destination[])
+{
+    SetFileAttributes(source ,FILE_ATTRIBUTE_NORMAL);
+    SetFileAttributes(destination,FILE_ATTRIBUTE_NORMAL);
+
+    if (!CopyFileA(source, destination, FALSE))
+    {
+        return 0;
+    }
+    else
+    {
+        return 1;
+    }
+}
 
 int main(void)
 {
     struct _finddata_t* files;
-    char path[MAX_PATH_LENGTH] = "C:\\*.*";
+    char currentPath[MAX_PATH_LENGTH] = "C:\\*.*";
+    char bufferPath[MAX_PATH_LENGTH];
+    char bufferFileName[MAX_PATH_LENGTH];
 
     int posInMenu = 0;   // selected file
     int prevPos = 0;     // previous selected file
@@ -228,11 +349,12 @@ int main(void)
     int posInPrevDir;    // position in previous directory
 
     hidecursor();
-    setwindow(44, 40);
+    setwindow(WINDOW_WIDTH, WINDOW_HEIGHT);
 
-    files = getValues(path);
+    files = getValues(currentPath);
     sort_bubble(files, dirSize);
     printDirectory(files);
+    printBufferStatus(bufferFileName);
     printColoredLine(posInMenu, BLACK, WHITE, files);
 
     while (key != 0) 
@@ -302,8 +424,8 @@ int main(void)
             case KEY_ARROW_RIGHT:    // Arrow right is pressed
                 if (files[posInMenu].size == 0) // If a directory is selected
                 { 
-                    appendWildcard(path, files[posInMenu].name);
-                    files = getValues(path);
+                    appendWildcard(currentPath, files[posInMenu].name);
+                    files = getValues(currentPath);
                     clrscr();
 
                     posInPrevDir = posInMenu;
@@ -311,31 +433,103 @@ int main(void)
                     prevPos = 0;
 
                     printDirectory(files);
-                if (dirSize != 0)
-                    printColoredLine(posInMenu, BLACK, WHITE, files);
+                    printBufferStatus(bufferFileName);
+                    
+                    if (dirSize != 0)
+                        printColoredLine(posInMenu, BLACK, WHITE, files);
 
-                depth++; }
+                    depth++;
+                }
                 break;
 
             case KEY_ARROW_LEFT:    // Arrow left is pressed 
                 if (depth > 0) 
                 {
-                    prevDir(path);
-                    files = getValues(path);
+                    prevDir(currentPath);
+                    files = getValues(currentPath);
                     clrscr();
 
                     posInMenu = posInPrevDir;
                     prevPos = 0;
 
                     printDirectory(files);
+                    printBufferStatus(bufferFileName);
+
                     if (dirSize != 0)
                         printColoredLine(posInMenu, BLACK, WHITE, files);
                     depth--;
                 }
                 break;
 
+            case KEY_X:
+                // Save the filename and path to it
+                strcpy(bufferFileName, files[posInMenu].name);
+                strcpy(bufferPath, currentPath);
+                currentBufferState = BUFFER_MOVING;
+                printBufferStatus(bufferFileName);
+                break;
+
+            case KEY_C:
+                if (files[posInMenu].size == 0)
+                {
+                    printCustomBufferStatus("Can't copy a directory.", LIGHTRED);
+                    break;
+                }
+
+                // Save the filename and path to it
+                strcpy(bufferFileName, files[posInMenu].name);
+                strcpy(bufferPath, currentPath);
+                currentBufferState = BUFFER_COPYING;
+                printBufferStatus(bufferFileName);
+                break;
+
+            case KEY_V:
+                // Do nothing if buffer is empty
+                if (currentBufferState == BUFFER_EMPTY)
+                {
+                    printCustomBufferStatus("Can't paste. Buffer empty.", LIGHTRED);
+                    break;
+                }
+
+                // Make a copy of currentPath, because its used elsewhere
+                char _currentPath[MAX_PATH_LENGTH];
+                strcpy(_currentPath, currentPath);
+
+                // Strip the paths from "*.*"
+                removeWildcard(bufferPath);
+                removeWildcard(_currentPath);
+
+                // Append filename to the paths 
+                strcat(bufferPath, bufferFileName);
+                strcat(_currentPath, bufferFileName);
+
+                // Determine whether moving or copying a file
+                if (currentBufferState == BUFFER_MOVING)
+                {
+                    moveFile(bufferPath, _currentPath);
+                    currentBufferState = BUFFER_EMPTY;
+                }
+                else if (currentBufferState == BUFFER_COPYING)
+                {
+                    if (!copyFile(bufferPath, _currentPath))
+                    {
+                        printCustomBufferStatus("Failed to paste file.", LIGHTRED);
+                        break;
+                    }
+                }
+
+                // Update current dir
+                files = getValues(currentPath);
+                clrscr();
+                printDirectory(files);
+                printColoredLine(posInMenu, BLACK, WHITE, files);
+                printCustomBufferStatus("Done.", LIGHTGREEN);
+
+                break;
+                
             case KEY_SPACEBAR:
-                if (dirSize > 0) {
+                if (dirSize > 0)
+                {
                     clrscr();
                     gotoxy(0,0);
                     printf
@@ -378,6 +572,7 @@ int main(void)
                                 break;
                         }
                         printDirectory(files);
+                        printBufferStatus(bufferFileName);
                         printColoredLine(0, BLACK, WHITE, files);
                         posInMenu = 0;
                         prevPos = 0;
