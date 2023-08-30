@@ -10,6 +10,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <math.h>
+#include <Shellapi.h>
 
 #include "windows.h"
 #include "winuser.h"

@@ -4,9 +4,6 @@
 #define SLEEP_TIME_MS 100
 #define MAX_PATH_LENGTH 255
 
-#define WINDOW_WIDTH 44
-#define WINDOW_HEIGHT 40
-
 #define KEY_ESC 0
 #define KEY_ARROW_UP 1
 #define KEY_ARROW_RIGHT 2
@@ -19,9 +16,13 @@
 #define KEY_ENTER 9 
 #define KEY_DELETE 10
 
+#define WINDOW_WIDTH 44
+#define WINDOW_HEIGHT 42
+
 const int MAX_FILES_ON_SCREEN = 37;
 const int BUFFER_STATUS_LINE = 38;
 const int FILE_COUNT_INFO_LINE = 39;
+const int KEYS_INFO_LINE = 40; // uses 2 lines 
 
 enum bufferState
 {
@@ -40,6 +41,13 @@ void printErrorMessage(char* errorMessage)
     gotoxy(1, 1);
     printf("%s. Error code: %ld.\n", errorMessage, GetLastError());
     system("pause");
+}
+
+void printKeysInfo()
+{
+    gotoxy(0, KEYS_INFO_LINE);
+    textcolor(DARKGRAY);
+    printf("[C] copy, [X] move, [V] paste,\n[DEL] delete, [ENTER] open file, [ESC] exit");
 }
 
 // Return a pressed key as a value from 0 to 4
@@ -161,6 +169,8 @@ void printBufferStatus(char bufferFileName[])
             break;
         case BUFFER_COPYING:
             printf("Copying: %s", bufferFileName);
+            break;
+        case BUFFER_EMPTY:
             break;
     }
     
@@ -319,9 +329,7 @@ int moveFile(char source[], char destination[])
         return 0;
     }
     else
-    {
         return 1;
-    }
 }
 
 // Copy file from source to destination. Returns 1 if succeeded, 0 if failed
@@ -342,15 +350,34 @@ int copyFile(char source[], char destination[])
         return 0;
     }
     else
-    {
         return 1;
-    }
 }
 
-int deleteFile(char file[])
+int openFile(char pathToFile[])
 {
-    SetFileAttributes(file, FILE_ATTRIBUTE_NORMAL);
-    return DeleteFile(file);
+    char systemPrompt[MAX_PATH_LENGTH + 6] = "start ";
+    strcat(systemPrompt, pathToFile);
+    system(systemPrompt);
+    /*
+    HINSTANCE hInstance = ShellExecute(NULL, L"open", pathToFile, NULL, NULL, SW_SHOWNORMAL);
+
+    if ((intptr_t)hInstance <= 32)
+    {
+        printCustomBufferStatus("Can't open file.", LIGHTRED);
+        return 0;
+    }
+    else
+    {
+        printCustomBufferStatus("Done.", LIGHTGREEN);
+        return 1;
+    }
+    */
+}
+
+int deleteFile(char pathToFile[])
+{
+    SetFileAttributes(pathToFile, FILE_ATTRIBUTE_NORMAL);
+    return DeleteFile(pathToFile);
 }
 
 int main(void)
@@ -375,6 +402,7 @@ int main(void)
     printDirectory(files);
     printBufferStatus(bufferFileName);
     printColoredLine(posInMenu, BLACK, WHITE, files);
+    printKeysInfo();
 
     while (key != 0) 
     {
@@ -453,6 +481,7 @@ int main(void)
 
                     printDirectory(files);
                     printBufferStatus(bufferFileName);
+                    printKeysInfo();
                     
                     if (dirSize != 0)
                         printColoredLine(posInMenu, BLACK, WHITE, files);
@@ -473,6 +502,7 @@ int main(void)
 
                     printDirectory(files);
                     printBufferStatus(bufferFileName);
+                    printKeysInfo();
 
                     if (dirSize != 0)
                         printColoredLine(posInMenu, BLACK, WHITE, files);
@@ -512,8 +542,6 @@ int main(void)
 
                 // Make a copy of currentPath, because its used elsewhere
                 strcpy(_currentPath, currentPath);
-
-                // Strip the paths from "*.*"
                 removeWildcard(bufferPath);
                 removeWildcard(_currentPath);
 
@@ -544,6 +572,7 @@ int main(void)
                 files = getValues(currentPath);
                 clrscr();
                 printDirectory(files);
+                printKeysInfo();
                 printColoredLine(posInMenu, BLACK, WHITE, files);
                 printCustomBufferStatus("Done.", LIGHTGREEN);
 
@@ -552,8 +581,6 @@ int main(void)
             case KEY_DELETE:
                 // Make a copy of currentPath, because its used elsewhere
                 strcpy(_currentPath, currentPath);
-
-                // Strip the path from "*.*"
                 removeWildcard(_currentPath);
 
                 // Append filename to the path
@@ -584,8 +611,26 @@ int main(void)
                 // Update current dir
                 files = getValues(currentPath);
                 printDirectory(files);
+                printKeysInfo();
                 printColoredLine(posInMenu, BLACK, WHITE, files);
                 printBufferStatus(bufferFileName);
+
+                break;
+
+            case KEY_ENTER:
+                if (files[posInMenu].size == 0)
+                {
+                    printCustomBufferStatus("Can't open DIR", LIGHTRED);   
+                }
+
+                // Make a copy of currentPath, because its used elsewhere
+                strcpy(_currentPath, currentPath);
+                removeWildcard(_currentPath);
+
+                // Append filename to the path
+                strcat(_currentPath, files[posInMenu].name);
+
+                openFile(_currentPath);
 
                 break;
 
@@ -634,6 +679,7 @@ int main(void)
                                 break;
                         }
                         printDirectory(files);
+                        printKeysInfo();
                         printBufferStatus(bufferFileName);
                         printColoredLine(0, BLACK, WHITE, files);
                         posInMenu = 0;
