@@ -19,10 +19,10 @@
 #define WINDOW_WIDTH 44
 #define WINDOW_HEIGHT 42
 
-const int MAX_FILES_ON_SCREEN = 37;
+const int MAX_FILES_ON_SCREEN = 36;
 const int BUFFER_STATUS_LINE = 38;
-const int FILE_COUNT_INFO_LINE = 39;
-const int KEYS_INFO_LINE = 40; // uses 2 lines 
+const int FILE_COUNT_INFO_LINE = BUFFER_STATUS_LINE + 1;
+const int KEYS_INFO_LINE = BUFFER_STATUS_LINE + 2; // uses 2 lines 
 
 enum bufferState
 {
@@ -125,20 +125,15 @@ void printDirectory(struct _finddata_t* files)
     else
     {
         gotoxy(0, 0);
-        for (int i = 0; i < dirSize; i++) 
+        for (int i = 0; i < dirSize && i < MAX_FILES_ON_SCREEN; i++) 
         {
-            if (count > MAX_FILES_ON_SCREEN)
-                break;
+            if (files[i].size == 0)
+            {
+                printf(" %-26.26s  %14s\n", files[i].name, "<DIR>");
+            }
             else
             {
-                if (files[i].size == 0)
-                {
-                    printf(" %-26.26s  %14s\n", files[i].name, "<DIR>");
-                }
-                else
-                {
-                    printf(" %-26.26s  %11lu KB\n", files[i].name, files[i].size / 1024);
-                }
+                printf(" %-26.26s  %11lu KB\n", files[i].name, files[i].size / 1024);
             }
         }
         gotoxy(0, FILE_COUNT_INFO_LINE);
@@ -583,6 +578,9 @@ int main(void)
                 strcpy(_currentPath, currentPath);
                 removeWildcard(_currentPath);
 
+                char _currentPathNoWildcard[MAX_PATH_LENGTH];
+                strcpy(_currentPathNoWildcard, _currentPath);
+
                 // Append filename to the path
                 strcat(_currentPath, files[posInMenu].name);
 
@@ -590,7 +588,7 @@ int main(void)
                 char confirmation;
                 clrscr();
                 printf(" Deleting file '%s'\n Located in: %s\n Are you sure? (y/n) ",
-                        files[posInMenu].name, currentPath);
+                        files[posInMenu].name, _currentPathNoWildcard);
                 scanf(" %c", &confirmation);
                 clrscr();
                 if (confirmation == 'y')
@@ -620,7 +618,8 @@ int main(void)
             case KEY_ENTER:
                 if (files[posInMenu].size == 0)
                 {
-                    printCustomBufferStatus("Can't open DIR", LIGHTRED);   
+                    printCustomBufferStatus("Can't open DIR", LIGHTRED);
+                    break;
                 }
 
                 // Make a copy of currentPath, because its used elsewhere
@@ -689,8 +688,7 @@ int main(void)
                 }
                 break;
 
-            case 0:
-                system("pause");
+            case KEY_ESC:
                 return 1;
         }
     }
