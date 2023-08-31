@@ -1,5 +1,5 @@
 # File Manager
-File manager with the functions of browsing directories, moving from one directory to another and sorting files in directory.
+Simple file manager witch console GUI
 
 
 ### INFO
@@ -10,5 +10,10 @@ Starting directory is C:/
 - **[Arrow Key up/down]**  -  *navigate through opened directory*
 - **[Arrow Key left]**  -  *open previous directory*
 - **[Arrow Key right]**  -  *open selected directory*
+- **[X]**  -  *select a file/directory to move*
+- **[C]**  -  *select a file to copy*
+- **[V]**  -  *paste file/directory into current directory*
+- **[C]**  -  *open selected file*
+- **[ESC]**  -  *close the program*
 - **[Spacebar]**  -  *show sorting options for opened directory*
 - **[ESC]**  -  *close the program*
